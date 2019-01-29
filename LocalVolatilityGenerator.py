@@ -18,17 +18,27 @@ class LocalVolatilitySurface(General2DTaylorSurface):
 
 
 class UnitLocalVolatilityGenerator:
-    def __init__(self, smoothing_parameter, gamma):
+    def __init__(self, smoothing_parameter, gamma, rng_seed=None):
         self.smoothing_parameter = smoothing_parameter
         self.global_exp_scale = gamma
+        if rng_seed is not None:
+            np.random.RandomState(rng_seed)
+        self.initial_random_state = np.random.get_state()
         pass
+
+    def reset_random(self):
+        np.random.set_state(self.initial_random_state)
+        pass
+
+    def get_random_state(self):
+        return self.initial_random_state
 
     def generate_derivatives(self, maximal_degree):
         ordered_derivatives = dict()
         alpha = self.smoothing_parameter
         for n in range(0, maximal_degree + 1):
             a = np.random.normal(0., 1., n + 1)
-            w = np.exp(-alpha*(n ** 2))
+            w = np.exp(-alpha * (n ** 2))
             a = w * a
             ordered_derivatives[n] = a
         return ordered_derivatives
