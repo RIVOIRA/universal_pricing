@@ -1,0 +1,234 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\author{Arnaud RIVOIRA}
+\title{Universal pricing machine discussions}
+\begin{document}
+
+\section{Introduction}
+The purpose of this document is to detail the architecture of the universal pricing machine in the case of the local volatility model.
+
+\section{Local volatility model in a nutshell}
+Assuming that it pays no dividend and that the interest rates are zero, we find the following dynamics under the risk neutral probability measure $\mathbb{P}^*$:
+\begin{align}
+\frac{dS_t}{S_t} = \sigma(S_t,t) dW_t
+\end{align}
+where $W_t$ is the standard Brownian motion.
+
+What matters for us is that, in that general diffusive model, one can relate the model parameter $\sigma(S,t)$ to the prices $C(K,T)$ of the call options of maturity $T$ and strike price $K$:
+\begin{align}\label{eq:DupireMatching}
+\Lambda(K,T) = \frac{K}{2}\sigma^2(K,T) = \frac{\frac{\partial C(T,K)}{\partial T}}{K\frac{\partial^2 C(T,K)}{\partial K^2}}
+\end{align}
+\textbf{That is going to be the corner stone of our machine learning approach.}
+
+\section{Challenge of the pricing machine}
+The goal of the machine is to determine the probability density function of the stock $p_S(s,t)$ under the measure $\mathbb{P}^*$ i.e. the probability of ending up in the vicinity of $s$ at time $t$ given that the stock was at $S_0$ at time 0.
+
+That density is related to the option price by:
+\begin{align}
+p_S(K,T) = \frac{\partial^2 C(K,T)}{\partial K^2}
+\end{align}
+
+For that, we must use as input the model parameter $\nu(K,T)$ and determine from it a solution meeting the Dupire's formula Eq.\ref{eq:DupireMatching}
+
+To complete the picture, we are going to consider that the solution can be represented by some Gaussian mixture. That is not really restrictive since any function can be decomposed as a series of Gaussian radial basis functions. 
+
+\section{Gaussian radial basis functions}
+\subsection{Expression}
+Gaussian radial basis functions are natural interpolating functions and, in the world of information theory, they correspond to a mixture of Gaussian variables. 
+As the stock price $S$ is log-normal, it is natural to introduce the log price $X_t$ as:
+\begin{align}
+X_t \triangleq  \ln(S_t/S_0)
+\end{align}
+And we have:
+\begin{align}
+&p_X(x,T) = p_S(S_0 e^x,T) S_0 e^x\\
+&p_S(S,T) = p_X(\ln(S/S_0),T)/S
+\end{align}
+The Gaussian mixture model reads:
+\begin{align}\label{eq:eqGaussianMixture}
+p_X(x,t) = \sum_{i=0}^{I} a_i(t) g(x-c_i(t), b_i(t))
+\end{align}
+where
+\begin{align}
+g(x,b) = \frac{1}{\sqrt{2\pi b}} e^{-\frac{x^2}{2b}}
+\end{align}
+The parameters $a_i(t)\geq 0,c_i(t),b_i(t)\geq 0$ are in turn functions of the time and $T_i(t)$ must be an increasing function. Those functions are typically going to be splines or coefficients of polynomials. We will see later on how to can formulated more explicitly in terms of neural network architecture.
+
+\subsection{Rationales of the choice}
+The reasons for that choice are manifold:
+\begin{itemize}
+\item If the local volatility surface $\nu$ is interpolated from a Gaussian radial basis function then it is clear from the Fokker Planck equation that  once the solution is in that class it is going to stay within it (if we accept the idea that the number of centroids may grow over time). Clearly, the initial condition being a Delta distribution, only one single centroid is enough for small maturities.
+\item From the Chapman Kolmogorov identity, we can consider that if the probability measure at time $T$ is approximated by some discretized measure (which all amounts to saying that the solutions can be quantized and remarking that discrete measures are degenerated cases of the Gaussian mixture), the probability density at the next step is of the form \ref{eq:eqGaussianMixture}.
+\item It is conditionally Gaussian just as the local volatility model.
+\end{itemize}
+
+The interpretation of \ref{eq:eqGaussianMixture} in terms of financial market model is clear. The probabilities $a_i$ are the discrete big picture scenarios under which the market behaves like a Black Scholes model of predefined volatility. Or, instead of saying that there is a single constant volatility coefficient as we do when plugging a Black Scholes model in, it all amounts to saying that there are $I$ economics experts giving their views on the market and the model is the combination of those alternative market views, weighted by the credibility of each expert.
+\subsection{Black Scholes connection}
+\subsection{General case}
+The Gaussian mixture being a mixture of Black Scholes models, we get for free the European option prices:
+\begin{align}\label{eq:CalibrationFormula}
+C(T,K) &= \int_{\mathbb{R}} (S_0 e^\xi - K)_+ p_X(\xi,T)d\xi \\
+&= \sum_{i=0}^{I}  a_i(T) \int_{\mathbb{R}} (S_0 e^\xi - K)_+ g(\xi-c_i(T),b_i(T))d\xi\\
+&= \sum_{i=0}^{I}  a_i(T) \int_{\mathbb{R}} (S_0 e^{c_i(T)} e^x - K)_+ g(\xi,b_i(T))dx\\
+& = S_0 \sum_{i=0}^{I}  a_i(T) e^{c_i(T)} \psi(b_i(T), e^{-c_i(T)} K/S_0)
+\end{align}
+where
+\begin{align}
+ &\psi(b,\kappa) = e^{b/2}\mathrm{N}(d^+) - \kappa \mathrm{N}(d^-)\\
+  &d^+ = d^- + \sqrt{b} \\
+  &d^-  = -\frac{\ln(\kappa)}{\sqrt{b}}
+\end{align}
+
+\subsection{Martingale}
+We are going to focus on the martingale framework where:
+\begin{align}
+c_i(t) = \underbrace{c_i(0)}_{\gamma_i} -\frac{b_i(t)}{2} 
+\end{align}
+In that case, equations Eq.\ref{eq:CalibrationFormula} becomes:
+\begin{align}\label{eq:martingaleFormula}
+&C(T,K) =  \sum_{i=0}^{I}  a_i(T)\Omega_i(K,T)\\
+&\Omega_i(K,T) = S_0 e^{\gamma_i} \mathrm{N}\left( d_i^+(T,K) \right) - K \mathrm{N}\left(d_i^-(T,K)\right)
+\end{align}
+where
+\begin{align}
+  &d_i^+(T,K)= d_i^-(T,K) + \sqrt{b_i(T)} \\
+  &d_i^-(T,K)  = \frac{\delta_i(K,T)}{\sqrt{b_i(T)}}\\
+  &\delta_i(K,T) = \gamma_i + \ln(S_0/K) - b_i(T)/2
+\end{align}
+We then have:
+\begin{align}
+\frac{\partial C(K,T)}{\partial T} = \sum_{i=0}^{I} \frac{d a_i(T)}{d T} \Omega_i(K,T) + a_i(T)\frac{\partial \Omega_i(K,T)}{\partial b_i}\frac{d b_i(T)}{d T}
+\end{align}
+with:
+\begin{align}
+\frac{\partial \Omega_i(K,T)}{\partial b_i} = \frac{K}{2} \underbrace{g\left(\delta_i(K,T), b_i(T) \right)}_{g_i(K,T)} 
+\end{align}
+\subsection{Network architecture}
+Crucially, $a_i(t),b_i(t),c_i(t)$ must be the outputs of the neural network.
+
+Contrary to the weights of the mixture and the width of the Gaussian kernels, the initial locations of the centroïds $c_i(0)$ is not expected to be a causal process so we make it depend on the whole local volatility surface.   
+
+Hence, we have:
+\begin{align}
+&a_i(t) = A_i(t,\mathcal{W}_a(\boldsymbol{\Lambda}_{0,t}))\\
+&b'_i(t) = B_i(t,\mathcal{W}_b(\boldsymbol{\Lambda}_{0,t}))\\
+&c_i(0) = C_i(t,\mathcal{W}_c(\boldsymbol{\Lambda}_{0,T}))
+\end{align}
+where $\boldsymbol{\Lambda}_{t_1,t_2}$ is the collection of all the local volatilities $\Lambda(K,\tau)$ with $\tau$  between $t_1$ and $t_2$.
+
+It means that the probability of the stock to be at some value at some date $t$ must not depend on the volatility of the stock after $t$.
+
+The general idea would be then to find the parameters of the networks $\mathcal{W}_a, \mathcal{W}_b, \mathcal{W}_c$ minimizing the gap to Dupire identity:
+\begin{align}\label{eq:ErrorANN}
+E^2_{\mathcal{W}_{a,b,c}} =\int_0^T\int_{K_{\mathrm{min}}}^{K_\mathrm{min}} \varepsilon(k,t)^2 dk dt
+\end{align}
+where
+\begin{align}
+&\varepsilon(k,t) = \frac{\partial C(k,t)}{\partial t} - \Lambda(k,t) k p_S(k,t)
+\end{align}
+and
+\begin{align}
+k p_S(k,t) = \sum_{i=0}^{I} a_i(t) g(\ln(k/S_0)-c_i(t), b_i(t)) = \sum_{i=0}^{I} a_i(t) g_i(k,t)
+\end{align}
+Using Eq\ref{eq:martingaleFormula}, we get:
+\begin{align}
+\varepsilon(k,t) =  \sum_{i=0}^{I}\varepsilon_i(k,t)
+\end{align}
+where 
+\begin{align}
+\varepsilon_i(k,t) = \frac{d a_i(t)}{d t} \Omega_i(k,t) + \frac{k}{2}  a_i(t) g_i(k,t) \left(\frac{d b_i(t)}{d t} - \sigma^2(k,t) \right)
+\end{align}
+\section{Time Block approach}
+For clarification sake, we are going to slice the time domain into blocks and demand that the time dependence of each parameter be piecewise linear.
+
+\section{First Time block}
+To make it more concrete, let us now detail the first time block of the neural network architecture.
+
+That is going to correspond to times between $0$ and $T_1$. $T_1$ could typically be 1 year.
+
+The initial condition is a Dirac distribution in $X_0 = 1$. 
+
+\begin{align}
+b_i(0)=0
+\end{align}
+And
+\begin{align}
+b_i(t)=t b_i(1)
+\end{align}
+The weights are going to be extrapolated flat for the first block:
+\begin{align}
+a_i(0)= a_i(1)
+\end{align}
+We are then left with the following 2 vectors to predict:
+\begin{align}
+&\boldsymbol{a}(1) = \left[ a_0(1), \cdots, a_I(1) \right]\\
+&\boldsymbol{b}(1) = \left[ b_0(1), \cdots, b_I(1) \right]
+\end{align}
+So the only thing we have now to determine is: 
+\begin{align}
+\boldsymbol{a}(1) = \boldsymbol{A}(1,\mathcal{W}_a(\boldsymbol{\Lambda}_{0,T_1})) \triangleq \mathcal{W}_a^1(\boldsymbol{\Lambda}_{0,T_1}) \\
+\boldsymbol{b}(1) = \boldsymbol{B}(1,\mathcal{W}_b(\boldsymbol{\Lambda}_{0,T_1})) \triangleq \mathcal{W}_b^1(\boldsymbol{\Lambda}_{0,T_1})
+\end{align}
+with
+\begin{align}
+\mathcal{W}_a^1(\boldsymbol{\Lambda}_{0,T_1})\geq 0\\
+\sum_{i=0}^I\mathcal{W}_a^1(\boldsymbol{\Lambda}_{0,T_1})_i = 1
+\end{align}
+
+
+Let us write:
+\begin{align}
+\boldsymbol{\Lambda}_{0,T_1} = \left[ \Lambda(k_m,t_n) \right]_{m\in \left\lbrace 0, \cdots, M \right\rbrace, n\in \left\lbrace 0, \cdots, N \right\rbrace}
+\end{align}
+
+The matching error given by Eq.\ref{eq:ErrorANN} now reads:
+\begin{align}
+&E^2_{\mathcal{W}_{a,b,c}^1}= \sum_{m=1}^{M-1}\sum_{n=1}^{N} \varepsilon(k_m,t_n)^2 \Delta k_m \Delta t_n\\
+&\Delta k_m \triangleq k_m-k_{m-1}\\
+&\Delta t_n \triangleq t_n-t_{n-1}
+\end{align}
+In that case, we also have a simple expression for $\varepsilon(k_m,t_n)$:
+\begin{align}
+&\varepsilon(k,t) \triangleq \sum_{i=0}^{I}\varepsilon_i(k,t)\\
+&\varepsilon_i(k,t) = k a_i(1) g_i(k,t) \left(b_i(1) - \nu(k,t) \right)
+\end{align}
+
+\section{Next time blocks}
+For $t\in \left[ T_Y, T_{Y+1}\right]$, let us posit $\Delta_Y t = t - t_Y$. We generalize inductively as follows:
+\begin{align}
+&\boldsymbol{a}(t) = \boldsymbol{a}(T_Y) + \Delta_Y t (\boldsymbol{a}(T_{Y+1})-\boldsymbol{a}(T_Y)) \\
+&\boldsymbol{b}(t) = \boldsymbol{b}(T_Y) + \Delta_Y t \boldsymbol{b}'(T_{Y+1})
+\end{align}
+We must determine 
+\begin{align}
+&\boldsymbol{a}(T_{Y+1}) =  \mathcal{W}_a^{Y+1}(\boldsymbol{\Lambda}_{T_Y,T_{Y+1}},\boldsymbol{\pi}_{T_Y}) \\
+&\boldsymbol{b}'(T_{Y+1}) =  \mathcal{W}_b^{Y+1}(\boldsymbol{\Lambda}_{T_Y,T_{Y+1}},\boldsymbol{\pi}_{T_Y})
+\end{align}
+where $\boldsymbol{\pi}_{T_Y}$ is the representation of the Gaussian mixture at time $T_Y$:
+\begin{align}
+\boldsymbol{\pi}_{T_Y} = \left[\boldsymbol{a}(T_Y),\boldsymbol{b}(T_Y)\right]
+\end{align}
+We must have:
+\begin{align}
+&\mathcal{W}_a^{Y+1}(\boldsymbol{\Lambda}_{T_Y,T_{Y+1}},\boldsymbol{\pi}_{T_Y})\geq 0\\
+&\sum_{i=0}^I\mathcal{W}_a^{Y+1}(\boldsymbol{\Lambda}_{T_Y,T_{Y+1}},\boldsymbol{\pi}_{T_Y})_i = 1\\
+&\mathcal{W}_b^{Y+1}(\boldsymbol{\Lambda}_{T_Y,T_{Y+1}},\boldsymbol{\pi}_{T_Y})\geq 0
+\end{align}
+As for the first block, we need to determine the parameters of each neural network to minimize Eq. \ref{eq:DupireMatching} encoding the matching gap to Dupire's formula.
+
+\section{Initial centroids}
+The training of the initial centroids $\gamma_i$ must be made at a higher level. The loss of each depends on the centroids so need to optimize that too. The initialization of the centroid must be rich enough. Taking them all equal to zero is probably not a good idea.
+
+\section{Remarks}
+\begin{itemize}
+\item The time step within each block can be taken equal to one month.
+\item We might have to do something to prevent centroids $c_i$ from cycling while moving from one time block to the next one. Penalizing large variations could then be considered.
+\item Topology matters for both that problem the concept of distance in the local volatility surface must be kept. The parameter $b_i$ is both a time and the typical radius of interaction of a centroid. Said differently, I would expect the update of the parameters to be essentially driven by the local volatility in the region located within a distance $b_i$ of the centroid $c_i$. I would even expect more precisely that $b_i$ must depend on the average level of the local volatility while the change in $a_i$ and $c_i$ must rather be sensitive to the gradient of the local volatility.
+\end{itemize}
+
+\end{document}

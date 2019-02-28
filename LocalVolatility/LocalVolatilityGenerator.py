@@ -1,6 +1,5 @@
-from General2DSurface import General2DTaylorSurface
+from .General2DSurface import General2DTaylorSurface
 import numpy as np
-import math
 
 
 class LocalVolatilitySurface(General2DTaylorSurface):
