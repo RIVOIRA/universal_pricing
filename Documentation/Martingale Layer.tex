@@ -1,0 +1,106 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\author{Arnaud RIVOIRA}
+\title{Martingale Layer}
+\begin{document}
+\maketitle
+
+\section{Objective}
+The objective of this document is to determine a function taking as input a vector of positive variables $m_1, m_2, \cdots, m_N$ and returning a vector of probabilities $p_1, p_2, \cdots p_N$ exhibiting a given first order moment $\mu$.
+
+Mathematically, it reads:
+\begin{align}
+&\forall i \in \left\lbrace 1, \cdots, N \right\rbrace, \quad p_i \geq 0\\
+& \sum_{i=1}^N p_i = 1\\
+& \sum_{i=1}^N x_i p_i = \mu
+\end{align}
+where $x_1 < x_2 < \cdots < x_N$ is a predefined set of \textbf{sorted} real numbers.
+
+To insure that the problem really makes sense, we are going to consider that $\mu$ satisfies $x_1 <\mu < x_N$.
+
+\section{Solution}
+Let us split the set of points into two subset depending on their relative positive with respect to $\mu$:
+\begin{align}
+\mathcal{I}_+ = \left\lbrace i \in \left\lbrace 1, \cdots, N \right\rbrace ; \quad x_i > \mu \right\rbrace\\
+\mathcal{I}_- = \left\lbrace i \in \left\lbrace 1, \cdots, N \right\rbrace ; \quad x_i \leq \mu \right\rbrace
+\end{align}
+By construction, we have:
+\begin{align}
+\mu_- \leq \mu < \mu_+
+\end{align}
+Let us calculate the barycenter $\mu_\pm$ defined by:
+\begin{align}\label{eq:mu_pm}
+\mu_\pm = \frac{\chi_\pm}{M_\pm}
+\end{align}
+with
+\begin{align}
+\chi_\pm = \sum_{i \in \mathcal{I}_\pm} x_i m_i
+\end{align}
+and
+\begin{align}
+M_\pm = \sum_{i \in \mathcal{I}_\pm} m_i
+\end{align}
+We want to determine $\theta \in \left[0, 1 \right]$ such that:
+\begin{align}\label{eq:mu}
+\mu = (1-\theta) \mu_- + \theta \mu_+ 
+\end{align}
+That yields:
+\begin{align}
+\theta = \frac{\mu - \mu_-}{\mu_+ - \mu_-}
+\end{align}
+Expanding Eq;\ref{eq:mu} using the expressions of $\mu_\pm$ written in Eq.\ref{eq:mu_pm}, we get:
+\begin{align}
+\mu = \sum_{i \in \mathcal{I}_-} x_i\frac{(1-\theta) m_i}{M_-} + \sum_{i \in \mathcal{I}_+} x_i\frac{\theta m_i}{M_+}
+\end{align}
+By definition, the first order moment $\mu$ relates to the probabilities $p_1, \cdots, p_N$ as follows:
+\begin{align}
+\mu = \sum_{i = 1}^N x_i p_i = \sum_{i \in \mathcal{I}_-} x_i p_i + \sum_{i \in \mathcal{I}_+} x_i p_i 
+\end{align}
+Which shows that a legitimate choice for $p_1, \cdots, p_N$ is:
+\begin{align}
+p_i = m_i \lambda_i
+\end{align}
+where $\lambda_i$ is given by:
+\begin{align}
+\lambda_i = 
+\begin{cases}
+\frac{1-\theta}{M_-} ; \quad \text{ if } i \in \mathcal{I}_-\\
+\frac{\theta}{M_+} ; \quad \text{ if } i \in \mathcal{I}_+
+\end{cases}
+\end{align}
+\section{Conclusions}
+\begin{itemize}
+\item We never used the fact that the series $x_1, \cdots, x_N$ was sorted
+\item The function mapping any positive inputs $\boldsymbol{m} = (m_1, \cdots, m_N)$ to a vector of probabilities $\boldsymbol{p} = (p_1, \cdots, p_N)$ exhibiting some predefined first order moment $\mu$ can be written:
+\begin{align}
+p_i (\boldsymbol{m}) = m_i \lambda_i(\boldsymbol{m})
+\end{align}
+where
+\begin{align}
+\lambda_i (\boldsymbol{m}) = 
+\begin{cases}
+\frac{1-\theta(\boldsymbol{m})}{M_- (\boldsymbol{m})} ; \quad \text{ if } i \in \mathcal{I}_-\\
+\frac{\theta(\boldsymbol{m})}{M_+(\boldsymbol{m})} ; \quad \text{ if } i \in \mathcal{I}_+
+\end{cases}
+\end{align}
+with:
+\begin{align}
+M_\pm  (\boldsymbol{m})= \sum_{i \in \mathcal{I}_\pm} m_i
+\end{align}
+and
+\begin{align}
+\theta(\boldsymbol{m}) = \frac{\mu - \mu_-(\boldsymbol{m})}{\mu_+(\boldsymbol{m}) - \mu_-(\boldsymbol{m})}
+\end{align}
+with
+\begin{align}
+\mu_\pm (\boldsymbol{m})= \frac{\chi_\pm (\boldsymbol{m})}{M_\pm (\boldsymbol{m})}\\
+\chi_\pm (\boldsymbol{m}) = \sum_{i \in \mathcal{I}_\pm} x_i m_i
+\end{align}
+
+\end{itemize}
+\end{document}
