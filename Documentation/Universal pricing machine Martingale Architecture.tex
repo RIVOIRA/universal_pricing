@@ -8,13 +8,13 @@
 \author{Arnaud RIVOIRA}
 \title{Universal pricing machine discussions}
 \begin{document}
-
+\maketitle
 \section{Introduction}
 The purpose of this document is to detail the architecture of the universal pricing machine in the case of the local volatility model.
 
 \section{Local volatility model in a nutshell}
 Assuming that it pays no dividend and that the interest rates are zero, we find the following dynamics under the risk neutral probability measure $\mathbb{P}^*$:
-\begin{align}
+\begin{align}\label{eq:BlackScholes}
 \frac{dS_t}{S_t} = \sigma(S_t,t) dW_t
 \end{align}
 where $W_t$ is the standard Brownian motion.
@@ -222,8 +222,54 @@ We must have:
 As for the first block, we need to determine the parameters of each neural network to minimize Eq. \ref{eq:DupireMatching} encoding the matching gap to Dupire's formula.
 
 \section{Initial centroids}
-The training of the initial centroids $\gamma_i$ must be made at a higher level. The loss of each depends on the centroids so need to optimize that too. The initialization of the centroid must be rich enough. Taking them all equal to zero is probably not a good idea.
+The training of the initial centroids $\gamma_i$ must be made at a higher level. The loss of each depends on the centroids so we need to optimize that too. The initialization of the centroids must be rich enough. Taking them all equal to zero is probably not a good idea.
 
+
+\section{Quality measures}
+\subsection{Vital conditions}\label{sec:vitalConditions}
+It is of the utmost importance that the produced outputs remain free of arbitrage:
+\begin{align}
+&\forall x \in \mathbb{R};\forall t>0 \quad p_X(x,t) \geq 0\\
+&\int_{\mathbb{R}} p_X(x,t) dx = 1
+\end{align}
+For the mixture of Gaussian exponential martingales, those properties are met as long as the parameters are those of a true mixture i.e.
+\begin{align}
+&a_i(t) \geq 0\\
+&\sum_{i=0}^I a_i(t) = 1
+\end{align}
+
+On top of those naive expressions of non arbitrage, we must also make sure that $S_t$ is a martingale, which is a straightforward corollary of Eq.\ref{eq:BlackScholes}:
+\begin{align}
+S_0 = \mathbb{E}\left\lbrace S_t\right\rbrace
+\end{align}
+For the mixture of Gaussian exponential martingales, that reads:
+\begin{align}\label{eq:FwdMatching}
+&\sum_{i=0}^I a_i(t)e^\gamma_i = 1
+\end{align}
+In Financial terms, Eq.\ref{eq:FwdMatching} is the condition for a correct pricing of the contract. For a one million contract, it is expected to be met up to one cent.
+\subsection{Strong requirements}\label{sec:strongRequirements}
+From the Eq.\ref{eq:DupireMatching}, we see that we must also have the calendar spread condition:
+\begin{align} \label{eq:CalendarSpread}
+\frac{\frac{\partial C(T,K)}{\partial T}}{K\frac{\partial^2 C(T,K)}{\partial K^2}} \geq 0
+\end{align}
+That condition is slightly less important than those of listed \ref{sec:vitalConditions} since it is related to options and options are somehow less liquid instruments than forward contracts. Still it is going to be considered as highly disappointing if the positiveness cannot be insured. That could for instance provide a system crash if that information is used downstream to calculate a local volatility, the solution provided by Dupire is indeed going to turn ... imaginary!
+
+\subsection{Quality metrics}
+If the conditions listed in Sec.\ref{sec:vitalConditions} and Sec.\ref{sec:vitalConditions} are all met then we can calculate the estimated local volatility $\hat{\sigma(K,T)}$ from:
+\begin{align}
+\hat{\sigma} (K,T)= \sqrt{\frac{2\frac{\partial C(T,K)}{\partial T}}{K^2\frac{\partial^2 C(T,K)}{\partial K^2}}}
+\end{align}
+The estimation error $\tilde{\sigma} (K,T)$ is given by:
+\begin{align}
+\tilde{\sigma} (K,T) =\vert \hat{\sigma} (K,T) - \sigma(K,T) \vert
+\end{align}
+Its order of magnitude is expected to be smaller than $0.01\%/\sqrt{\text{year}}$.
+
+On can for instance consider its all inclusive averaged version as a decent one number quality metric:
+\begin{align}
+\langle\tilde{\sigma}\rangle &= \frac{1}{T} \int_0^T \int_{\mathbb{R}}\tilde{\sigma} (k,t) p_S(K,T) dk dt\\
+&\sim \frac{1}{T} \int_0^T \tilde{\sigma} (k,t)  k^2 \frac{\partial^2 C(t,k)}{\partial k^2}  dk dt
+\end{align}
 \section{Remarks}
 \begin{itemize}
 \item The time step within each block can be taken equal to one month.
